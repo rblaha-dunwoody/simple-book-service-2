@@ -1,8 +1,10 @@
 package com.example.ryansimpleservice;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,90 +13,59 @@ import java.util.List;
 @CrossOrigin(origins = "http://localhost:5173")
 public class BookController {
 
-    private final List<Book> books = new ArrayList<>();
+    private final BookRepository bookRepository;
 
-    public BookController() {
-        books.add(new Book(
-                1,
-                "The Hobbit",
-                "J.R.R. Tolkein",
-                14.99
-        ));
-
-        books.add(new Book(
-                2,
-                "1984",
-                "George Orwell",
-                12.99
-        ));
-
-        books.add(new Book(
-                3,
-                "Dune",
-                "Frank Herbert",
-                16.99
-        ));
+    public BookController(BookRepository bookRepository) {
+        this.bookRepository = bookRepository;
     }
 
     @GetMapping
-    public List<Book> getBooks() {
-        return books;
+    public ResponseEntity<List<Book>> getBooks() {
+        return ResponseEntity.ok(bookRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Book> getBook(@PathVariable int id) {
-
-        for (Book book : books) {
-            if (book.getId() == id) {
-                return ResponseEntity.ok(book);
-            }
-        }
-
-        return ResponseEntity.notFound().build();
+    public ResponseEntity<Book> getBook(@PathVariable Long id) {
+        return bookRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping
     public ResponseEntity<Book> addBook(@RequestBody Book book) {
+        // Let MySQL generate a new ID
+        book.setId(null);
 
-        int newId = books.size() + 1;
-        book.setId(newId);
+        Book savedBook = bookRepository.save(book);
 
-        books.add(book);
-
-        return ResponseEntity.status(201).body(book);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(savedBook);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteBook(@PathVariable int id) {
-        for (Book book : books) {
-            if (book.getId() == id) {
-                books.remove(book);
-                return ResponseEntity.noContent().build();
-            }
+    public ResponseEntity<Void> deleteBook(@PathVariable Long id) {
+        if (!bookRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.notFound().build();
+        bookRepository.deleteById(id);
+
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Book> updateBook(@PathVariable int id, @RequestBody Book updatedBook) {
+    public ResponseEntity<Book> updateBook(@PathVariable Long id, @RequestBody Book updatedBook) {
+        return bookRepository.findById(id)
+                .map(existingBook -> {
+                    existingBook.setTitle(updatedBook.getTitle());
+                    existingBook.setAuthor(updatedBook.getAuthor());
+                    existingBook.setPrice(updatedBook.getPrice());
 
-        for (Book book : books) {
-            if (book.getId() == id) {
+                    Book savedBook = bookRepository.save(existingBook);
 
-                book.setTitle(updatedBook.getTitle());
-                book.setAuthor(updatedBook.getAuthor());
-                book.setPrice(updatedBook.getPrice());
-
-                return ResponseEntity.ok(book);
-            }
-        }
-
-        return ResponseEntity.notFound().build();
-    }
-
-    @GetMapping("/hello")
-    public String hello() {
-        return "Hello from Spring!";
+                    return ResponseEntity.ok(savedBook);
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }
